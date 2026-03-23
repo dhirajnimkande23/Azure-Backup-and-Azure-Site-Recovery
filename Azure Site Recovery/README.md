@@ -128,5 +128,98 @@ Here’s a summary for DR using ASR:
 
 CLI/ARM/Bicep code for ASR is more involved (fabric containers, replication-protected-items etc) — I can share a full module if you want.
 
+# ✅ CLI / Azure PowerShell Snippets
 
----
+### 1. Install/Configure CLI extension
+
+```bash
+# Install the ASR extension for the Azure CLI
+az extension add --name site-recovery
+```
+
+(This gives you the `az site-recovery` commands). ([N2W Software][1])
+
+### 2. Create Recovery Services Vault (if not already)
+
+```bash
+az group create --name MyRG --location eastus
+
+az recovery-services vault create \
+  --resource-group MyRG \
+  --name MyRSVault \
+  --location eastus
+```
+
+Then set vault context for ASR:
+
+```bash
+az site-recovery vault set \
+  --vault-name MyRSVault \
+  --resource-group MyRG
+```
+
+(Use the vault in subsequent commands) ([N2W Software][1])
+
+### 3. Enable replication for an Azure VM (Azure to Azure scenario)
+
+```bash
+az site-recovery protection-container mapping create \
+  --resource-group MyRG \
+  --vault-name MyRSVault \
+  --fabric-name PrimaryFabric \
+  --protection-container PrimaryPC \
+  --recovery-fabric RecoveryFabric \
+  --recovery-protection-container RecoveryPC \
+  --policy-name MyReplicationPolicy
+
+az site-recovery protected-item create \
+  --resource-group MyRG \
+  --vault-name MyRSVault \
+  --fabric-name PrimaryFabric \
+  --protection-container PrimaryPC \
+  --protection-container-name PrimaryPC \
+  --name MyVMName-RPI \
+  --policy-id <policyId> \
+  --provider-details '{ "azureToAzure": { "osType": "Windows", "vmId": "<sourceVmId>", "recoveryResourceGroupId": "<rgId>", "recoveryAzureNetworkId": "<vnetId>", "recoverySubnetName": "<subnetName>" } }'
+```
+
+This is based on the `az site-recovery protected-item create` command. ([Microsoft Learn][2])
+(You’ll need to replace placeholders with your specific fabric, containers, VM IDs etc.)
+
+### 4. Failover / Test Failover / Commit / Re-protect
+
+```bash
+# Test failover (without committing)
+az site-recovery protected-item planned-failover \
+  --resource-group MyRG \
+  --vault-name MyRSVault \
+  --fabric-name PrimaryFabric \
+  --protection-container PrimaryPC \
+  --name MyVMName-RPI \
+  --failover-direction PrimaryToRecovery
+
+# Unplanned failover
+az site-recovery protected-item unplanned-failover \
+  --resource-group MyRG \
+  --vault-name MyRSVault \
+  --fabric-name PrimaryFabric \
+  --protection-container PrimaryPC \
+  --name MyVMName-RPI
+
+# Commit failover
+az site-recovery protected-item failover-commit \
+  --resource-group MyRG \
+  --vault-name MyRSVault \
+  --fabric-name PrimaryFabric \
+  --protection-container PrimaryPC \
+  --name MyVMName-RPI
+
+# Reprotect (after recovery)
+az site-recovery protected-item reprotect \
+  --resource-group MyRG \
+  --vault-name MyRSVault \
+  --fabric-name RecoveryFabric \
+  --protection-container RecoveryPC \
+  --name MyVMName-RPI
+```
+
